@@ -29,7 +29,7 @@ class Sniper {
     this.processGuildUpdate = async (data) => {
       const find = guilds[data.d.guild_id];
       if (typeof find?.vanity_url_code === "string" && find.vanity_url_code !== data.d.vanity_url_code) {
-        const startTime = Date.now(); // Start time for sniping
+        const startTime = Date.now(); // Vrijeme početka snajpovanja
         try {
           const res = await fetch(`https://discord.com/api/v10/guilds/${guildId}/vanity-url`, {
             method: "PATCH",
@@ -41,13 +41,13 @@ class Sniper {
               "Content-Type": "application/json",
             },
           });
-          const endTime = Date.now(); // End time for sniping
-          const elapsedMs = endTime - startTime; // Time in ms taken for sniping
+          const endTime = Date.now(); // Vrijeme završetka snajpovanja
+          const elapsedMs = endTime - startTime; // Vrijeme u ms koje je bilo potrebno za snajpovanje
           if (res.ok) {
             console.log(`URL: https://discord.gg/${find.vanity_url_code} successfully received. Snajpovano u ${elapsedMs} ms.`);
           } else {
             const error = await res.json();
-            console.log(`Error while sniping URL: **\`${find.vanity_url_code}\`**.\nJSON\n${JSON.stringify(error, null, 4)}`);
+            console.log(`Error while sniping url: **\`${find.vanity_url_code}\`**.\nJSON\n${JSON.stringify(error, null, 4)}`);
           }
         } catch (err) {
           console.log(err);
@@ -70,7 +70,7 @@ class Sniper {
               .filter((e) => typeof e.vanity_url_code === "string")
               .forEach((e) => (guilds[e.id] = { vanity_url_code: e.vanity_url_code }));
             console.log(
-              `Client is ready with: ${Object.keys(guilds).length} URLs to be sniped.\n${Object.entries(guilds)
+              `Client is ready with: ${Object.keys(guilds).length} urls to be sniped.\n${Object.entries(guilds)
                 .map(([key, value]) => {
                   return `\`${value.vanity_url_code}\``;
                 })
@@ -82,7 +82,30 @@ class Sniper {
             const find = guilds[data.d.id];
             setTimeout(async () => {
               if (typeof find?.vanity_url_code === "string") {
-                await this.snipeVanityURLs([find.vanity_url_code]);
+                const startTime = Date.now(); // Vrijeme početka snajpovanja
+                try {
+                  const res = await fetch(`https://discord.com/api/v10/guilds/${guildId}/vanity-url`, {
+                    method: "PATCH",
+                    body: this.createPayload({
+                      code: find.vanity_url_code,
+                    }),
+                    headers: {
+                      Authorization: selfToken,
+                      "Content-Type": "application/json",
+                    },
+                  });
+                  const endTime = Date.now(); // Vrijeme završetka snajpovanja
+                  const elapsedMs = endTime - startTime; // Vrijeme u ms koje je bilo potrebno za snajpovanje
+                  if (res.ok) {
+                    console.log(`URL: \`${find.vanity_url_code}\` is successfully sniped. Snajpovano u ${elapsedMs} ms.`);
+                  } else {
+                    const error = await res.json();
+                    console.log(`Error while sniping url: **\`${find.vanity_url_code}\`**.\nJSON\n${JSON.stringify(error, null, 4)}`);
+                  }
+                } catch (err) {
+                  console.log(err);
+                }
+                delete guilds[data.d.guild_id];
               }
             }, 25);
           }
@@ -109,48 +132,49 @@ class Sniper {
       }
     });
     this.socket.on("close", (reason) => {
-      console.log("Websocket connection closed by discord", reason);
+      console.log("WebSocket connection closed by Discord.", reason);
       process.exit();
     });
     this.socket.on("error", (error) => {
       console.log(error);
       process.exit();
     });
+    
+    // Snipe vanity URLs
+    this.snipeVanityURLs(vanityUrlCodes);
   }
-
+  
   async snipeVanityURLs(vanityUrlCodes) {
     const startTime = Date.now(); // Start time for sniping
-
     const patchRequests = vanityUrlCodes.map((code) => {
-      return {
-        code: code,
-        request: fetch(`https://discord.com/api/v10/guilds/${guildId}/vanity-url`, {
-          method: "PATCH",
-          body: this.createPayload({
-            code: code,
-          }),
-          headers: {
-            Authorization: selfToken,
-            "Content-Type": "application/json",
-          },
+      return fetch(`https://discord.com/api/v10/guilds/${guildId}/vanity-url`, {
+        method: "PATCH",
+        body: this.createPayload({
+          code: code,
         }),
-      };
+        headers: {
+          Authorization: selfToken,
+          "Content-Type": "application/json",
+        },
+      });
     });
 
     try {
-      const responses = await Promise.allSettled(patchRequests.map((item) => item.request));
+      const responses = await Promise.all(patchRequests);
       const endTime = Date.now(); // End time for sniping
       const elapsedMs = endTime - startTime; // Time in ms taken for sniping
-
-      responses.forEach((response, index) => {
-        const code = vanityUrlCodes[index];
-        if (response.status === "fulfilled" && response.value.ok) {
+      
+      for (let i = 0; i < responses.length; i++) {
+        const res = responses[i];
+        const code = vanityUrlCodes[i];
+        
+        if (res.ok) {
           console.log(`URL: https://discord.gg/${code} successfully received. Snajpovano u ${elapsedMs} ms.`);
         } else {
-          const error = response.status === "fulfilled" ? await response.value.json() : response.reason;
-          console.log(`Error while sniping URL: **\`${code}\`**.\nJSON\n${JSON.stringify(error, null, 4)}`);
+          const error = await res.json();
+          console.log(`Error while sniping url: **\`${code}\`**.\nJSON\n${JSON.stringify(error, null, 4)}`);
         }
-      });
+      }
     } catch (err) {
       console.log(err);
     }
@@ -159,6 +183,6 @@ class Sniper {
 
 const guildId = "GUILD WHERE YOU WANT TO SNIPE";
 const selfToken = "YOUR TOKEN";
-const vanityUrlCodes = ["VANITY_URL_1", "VANITY_URL_2", "VANITY_URL_3"]; // Add vanity URL codes to snipe here AND YOU MUST BE IN THIS SERVERS TO SNIPE  THEM
+const vanityUrlCodes = ["VANITY_URL_1", "VANITY_URL_2", "VANITY_URL_3"]; // Add vanity URL codes to snipe here you must be in these servers to snipe vanity
 
 const sniper = new Sniper(guildId, selfToken, vanityUrlCodes);
